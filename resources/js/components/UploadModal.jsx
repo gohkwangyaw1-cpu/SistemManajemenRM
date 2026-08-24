@@ -6,9 +6,12 @@ import {
     AlertCircle, 
     CheckCircle2, 
     Loader2,
-    HardDrive
+    HardDrive,
+    Camera,
+    Sparkles
 } from 'lucide-react';
 import axios from 'axios';
+import DocumentScannerModal from './DocumentScannerModal';
 
 const CATEGORIES = [
     'Resume Medis',
@@ -26,6 +29,7 @@ export default function UploadModal({ patient, onClose, onSuccess }) {
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
     
     const fileInputRef = useRef(null);
 
@@ -162,6 +166,27 @@ export default function UploadModal({ patient, onClose, onSuccess }) {
                         </select>
                     </div>
 
+                    {/* Tombol Scanner Kamera / Auto Edge Detection */}
+                    <div className="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-2xl border border-red-200/80 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-[#BA1B1D] text-white flex items-center justify-center shadow-md shadow-red-900/20">
+                                <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">Scan Dokumen Otomatis</p>
+                                <p className="text-[10px] text-slate-500">Ambil foto & deteksi sudut kertas ala Adobe Scan</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsScannerOpen(true)}
+                            className="px-3.5 py-2 bg-white hover:bg-slate-50 active:scale-95 border border-red-300 text-[#BA1B1D] text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                        >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Buka Scanner</span>
+                        </button>
+                    </div>
+
                     {/* Drag & Drop Zone */}
                     <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -263,6 +288,15 @@ export default function UploadModal({ patient, onClose, onSuccess }) {
                 </form>
 
             </div>
+
+            {/* Modal Scanner Kamera & Auto Crop Kertas */}
+            <DocumentScannerModal
+                isOpen={isScannerOpen}
+                onClose={() => setIsScannerOpen(false)}
+                onScanComplete={(scannedFile) => {
+                    validateAndSetFile(scannedFile);
+                }}
+            />
         </div>
     );
 }
