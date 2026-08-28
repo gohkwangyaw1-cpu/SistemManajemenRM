@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\PasienController;
 use Illuminate\Support\Facades\Route;
 
 // SIMRS Pasien Endpoints
+Route::get('/pasien', [PasienController::class, 'index']);
 Route::get('/pasien/search', [PasienController::class, 'search']);
 Route::get('/pasien/{no_rekam_medis}', [PasienController::class, 'show']);
 

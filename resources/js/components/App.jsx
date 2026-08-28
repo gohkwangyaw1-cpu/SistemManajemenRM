@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import Header from './Header';
-import SearchSection from './SearchSection';
+import PatientTableView from './PatientTableView';
 import PatientInfoCard from './PatientInfoCard';
 import FileListSection from './FileListSection';
 import DocumentViewer from './DocumentViewer';
 import UploadModal from './UploadModal';
 import axios from 'axios';
-import { AlertCircle, UserCheck, Inbox, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Users, FileText, CheckCircle2, ChevronRight } from 'lucide-react';
 
 export default function App() {
-    // Current Active Patient
+    // Current Active View: 'table' (Tabel Utama Pasien) | 'detail' (Detail Pasien & Arsip Medis)
+    const [currentView, setCurrentView] = useState('table');
+    
+    // Patient List Data
+    const [patients, setPatients] = useState([]);
+    const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+    const [tableSearchQuery, setTableSearchQuery] = useState('');
+    const [selectedPoli, setSelectedPoli] = useState('');
+    const [selectedAsuransi, setSelectedAsuransi] = useState('');
+
+    // Detail Patient State
     const [selectedPatient, setSelectedPatient] = useState(null);
-    const [searchState, setSearchState] = useState('initial'); // 'initial' | 'found' | 'not_found' | 'loading'
-    const [searchQuery, setSearchQuery] = useState('');
-    const [errorMessage, setErrorMessage] = useState('');
     
     // File List
     const [files, setFiles] = useState([]);
@@ -32,48 +39,31 @@ export default function App() {
         }, 4000);
     };
 
-    // Quick search on mount or load sample patient
+    // Load all patients on mount for main table
     useEffect(() => {
-        // Load default patient RM001245 for instant smooth demonstration
-        handleSearchPatient('RM001245');
+        fetchPatientsList();
     }, []);
 
-    // Search patient handler
-    const handleSearchPatient = async (query) => {
-        const term = query !== undefined ? query.trim() : searchQuery.trim();
-        if (!term) return;
-
-        setSearchState('loading');
-        setErrorMessage('');
-        setSelectedFile(null);
-
+    // Fetch patient list from SIMRS
+    const fetchPatientsList = async () => {
+        setIsLoadingPatients(true);
         try {
-            const res = await axios.get(`/api/pasien/search?q=${encodeURIComponent(term)}`);
-            const results = res.data.data;
-
-            if (results && results.length > 0) {
-                // Exact or best match
-                const matched = results.find(p => 
-                    p.no_rekam_medis.toLowerCase() === term.toLowerCase() ||
-                    p.no_registrasi.toLowerCase() === term.toLowerCase()
-                ) || results[0];
-
-                setSelectedPatient(matched);
-                setSearchState('found');
-                fetchPatientFiles(matched.no_rekam_medis);
-            } else {
-                setSelectedPatient(null);
-                setFiles([]);
-                setSearchState('not_found');
-                setErrorMessage(`No. Rekam Medis atau No. Registrasi "${term}" tidak ditemukan di database SIMRS.`);
-            }
+            const res = await axios.get('/api/pasien');
+            setPatients(res.data.data || []);
         } catch (err) {
-            console.error(err);
-            setSelectedPatient(null);
-            setFiles([]);
-            setSearchState('not_found');
-            setErrorMessage('Terjadi kendala saat menghubungkan ke database SIMRS.');
+            console.error("Error fetching patients list:", err);
+            setPatients([]);
+        } finally {
+            setIsLoadingPatients(false);
         }
+    };
+
+    // Handler saat tombol Action Detail Pasien diklik di tabel
+    const handleOpenPatientDetail = (patient) => {
+        setSelectedPatient(patient);
+        setCurrentView('detail');
+        fetchPatientFiles(patient.no_rekam_medis);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // Fetch archive files for selected patient
@@ -88,7 +78,6 @@ export default function App() {
                 if (autoSelectLatest || !selectedFile) {
                     setSelectedFile(list[0]);
                 } else {
-                    // Refresh current selected file if still exists
                     const exists = list.find(f => f.id === selectedFile.id);
                     setSelectedFile(exists || list[0]);
                 }
@@ -135,7 +124,7 @@ export default function App() {
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans selection:bg-[#BA1B1D]/10 selection:text-[#BA1B1D]">
             {/* 1. Header RS Awal Bros */}
-            <Header />
+            <Header onNavigateHome={() => setCurrentView('table')} />
 
             {/* Notification Toast */}
             {toastMessage && (
@@ -148,77 +137,88 @@ export default function App() {
             {/* Main Content Area */}
             <main className="flex-1 max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col gap-4">
                 
-                {/* 2. Pencarian Pasien */}
-                <SearchSection 
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    onSearch={() => handleSearchPatient()}
-                    onSelectPatient={(p) => {
-                        setSearchQuery(p.no_rekam_medis);
-                        setSelectedPatient(p);
-                        setSearchState('found');
-                        fetchPatientFiles(p.no_rekam_medis);
-                    }}
-                    isLoading={searchState === 'loading'}
-                />
+                {/* ===================== VIEW 1: TABEL DATA PASIEN (DEFAULT) ===================== */}
+                {currentView === 'table' && (
+                    <PatientTableView 
+                        patients={patients}
+                        isLoading={isLoadingPatients}
+                        onSelectPatient={handleOpenPatientDetail}
+                        onRefresh={fetchPatientsList}
+                        searchQuery={tableSearchQuery}
+                        setSearchQuery={setTableSearchQuery}
+                        selectedPoli={selectedPoli}
+                        setSelectedPoli={setSelectedPoli}
+                        selectedAsuransi={selectedAsuransi}
+                        setSelectedAsuransi={setSelectedAsuransi}
+                    />
+                )}
 
-                {/* State 3: Data Tidak Ditemukan Alert */}
-                {searchState === 'not_found' && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 text-rose-800 shadow-sm flex items-start gap-3.5 transition-all">
-                        <AlertCircle className="w-6 h-6 text-[#BA1B1D] shrink-0 mt-0.5" />
-                        <div>
-                            <h4 className="text-sm font-bold text-[#8F1012]">Data Pasien Tidak Ditemukan</h4>
-                            <p className="text-xs text-rose-700 mt-0.5">{errorMessage}</p>
-                            <p className="text-xs text-rose-600 mt-1 font-medium">Tips: Periksa kembali pengetikan No. RM (contoh: RM001245) atau cari dengan nama pasien (contoh: Budi Santoso).</p>
+                {/* ===================== VIEW 2: DETAIL PASIEN & ARSIP MEDIS ===================== */}
+                {currentView === 'detail' && (
+                    <div className="space-y-4 animate-in fade-in duration-200">
+                        
+                        {/* Navigation Top Bar: Tombol Kembali & Breadcrumb */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:px-5 rounded-2xl border border-slate-200 shadow-xs">
+                            <div className="flex items-center gap-2 text-xs">
+                                <button
+                                    onClick={() => {
+                                        setCurrentView('table');
+                                        fetchPatientsList();
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-red-50 hover:border-red-200 text-slate-700 hover:text-[#BA1B1D] font-bold transition cursor-pointer"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    <span>Kembali ke Tabel Pasien</span>
+                                </button>
+                                <span className="text-slate-300">/</span>
+                                <span className="text-slate-500 font-medium">Detail Rekam Medis:</span>
+                                <span className="font-extrabold text-[#BA1B1D] font-mono">
+                                    {selectedPatient ? selectedPatient.no_rekam_medis : '-'}
+                                </span>
+                            </div>
+
+                            {selectedPatient && (
+                                <div className="text-xs text-slate-500">
+                                    Pasien: <strong className="text-slate-900">{selectedPatient.nama_pasien}</strong>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Content Detail Pasien & Berkas */}
+                        {selectedPatient && (
+                            <>
+                                {/* 3. Panel Informasi Pasien (Data SIMRS) */}
+                                <PatientInfoCard patient={selectedPatient} />
+
+                                {/* 4. Dua Kolom: Daftar Berkas Rekam Medis & Document Previewer */}
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[580px] pb-6">
+                                    
+                                    {/* Kolom Kiri: Daftar Berkas (5 cols) */}
+                                    <div className="lg:col-span-5 flex flex-col">
+                                        <FileListSection 
+                                            patient={selectedPatient}
+                                            files={files}
+                                            isLoading={isLoadingFiles}
+                                            selectedFile={selectedFile}
+                                            onSelectFile={(file) => setSelectedFile(file)}
+                                            onDeleteFile={handleDeleteFile}
+                                            onOpenUpload={() => setIsUploadOpen(true)}
+                                        />
+                                    </div>
+
+                                    {/* Kolom Kanan: Previewer Dokumen (7 cols) */}
+                                    <div className="lg:col-span-7 flex flex-col">
+                                        <DocumentViewer 
+                                            file={selectedFile}
+                                            patient={selectedPatient}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
 
-                {/* State 1: State Awal (Belum cari / kosong) */}
-                {searchState === 'initial' && (
-                    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/70 backdrop-blur-sm p-12 text-center shadow-xs my-4">
-                        <div className="w-16 h-16 bg-red-50 text-[#BA1B1D] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner">
-                            <ShieldCheck className="w-8 h-8" />
-                        </div>
-                        <h3 className="text-base font-bold text-slate-800">Sistem Arsip Elektronik Rekam Medis Siap Digunakan</h3>
-                        <p className="text-slate-500 text-sm max-w-md mx-auto mt-1">
-                            Silakan masukkan <span className="font-semibold text-slate-700">No. Rekam Medis</span>, <span className="font-semibold text-slate-700">No. Registrasi</span>, atau <span className="font-semibold text-slate-700">Nama Pasien</span> pada kolom pencarian di atas.
-                        </p>
-                    </div>
-                )}
-
-                {/* State 2: Pasien Ditemukan */}
-                {searchState === 'found' && selectedPatient && (
-                    <>
-                        {/* 3. Panel Informasi Pasien (Data SIMRS) */}
-                        <PatientInfoCard patient={selectedPatient} />
-
-                        {/* 4. Dua Kolom: Daftar Berkas Rekam Medis & Document Previewer */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[580px] pb-6">
-                            
-                            {/* Kolom Kiri: Daftar Berkas (5 cols) */}
-                            <div className="lg:col-span-5 flex flex-col">
-                                <FileListSection 
-                                    patient={selectedPatient}
-                                    files={files}
-                                    isLoading={isLoadingFiles}
-                                    selectedFile={selectedFile}
-                                    onSelectFile={(file) => setSelectedFile(file)}
-                                    onDeleteFile={handleDeleteFile}
-                                    onOpenUpload={() => setIsUploadOpen(true)}
-                                />
-                            </div>
-
-                            {/* Kolom Kanan: Previewer Dokumen (7 cols) */}
-                            <div className="lg:col-span-7 flex flex-col">
-                                <DocumentViewer 
-                                    file={selectedFile}
-                                    patient={selectedPatient}
-                                />
-                            </div>
-                        </div>
-                    </>
-                )}
             </main>
 
             {/* Modal Upload Berkas */}

@@ -9,6 +9,44 @@ use Illuminate\Http\Request;
 class PasienController extends Controller
 {
     /**
+     * Get paginated patient list for main table view
+     */
+    public function index(Request $request)
+    {
+        $query = trim($request->query('q', ''));
+        $poli = trim($request->query('poli', ''));
+        $asuransi = trim($request->query('asuransi', ''));
+
+        $pasiensQuery = Pasien::withCount('berkas');
+
+        if (!empty($query)) {
+            $pasiensQuery->where(function ($q) use ($query) {
+                $q->where('no_rekam_medis', 'LIKE', "%{$query}%")
+                  ->orWhere('no_registrasi', 'LIKE', "%{$query}%")
+                  ->orWhere('nama_pasien', 'LIKE', "%{$query}%")
+                  ->orWhere('nik', 'LIKE', "%{$query}%")
+                  ->orWhere('dpjp', 'LIKE', "%{$query}%");
+            });
+        }
+
+        if (!empty($poli)) {
+            $pasiensQuery->where('poli_ruangan', 'LIKE', "%{$poli}%");
+        }
+
+        if (!empty($asuransi)) {
+            $pasiensQuery->where('jenis_asuransi', 'LIKE', "%{$asuransi}%");
+        }
+
+        $pasiens = $pasiensQuery->orderBy('id', 'asc')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $pasiens,
+            'total' => $pasiens->count(),
+        ]);
+    }
+
+    /**
      * Search patient by No. RM, No. Registrasi, or Name (simulating SIMRS)
      */
     public function search(Request $request)
@@ -16,8 +54,8 @@ class PasienController extends Controller
         $query = trim($request->query('q', ''));
 
         if (empty($query)) {
-            // Return top 8 recent patients for quick pick
-            $pasiens = Pasien::withCount('berkas')->orderBy('id', 'desc')->limit(8)->get();
+            // Return all recent patients for quick pick
+            $pasiens = Pasien::withCount('berkas')->orderBy('id', 'asc')->get();
             return response()->json([
                 'status' => 'success',
                 'data' => $pasiens,
